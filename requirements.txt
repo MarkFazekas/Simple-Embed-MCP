@@ -1,0 +1,21 @@
+fastmcp==4.0.0b2                        # The fast, Pythonic way to build MCP servers and clients.
+
+
+# Lint tools:
+gitlint==0.19.1                         # Git commit message linter written in python, checks your commit messages for style.
+ruff==0.16.0                            # An extremely fast Python linter and code formatter, written in Rust.
+flake8==7.3.0                           # wrapper around these tools: PyFlakes, pycodestyle, Ned Batchelder’s McCabe script
+mypy==2.3.0                             # Optional static typing for Python
+
+# Plugins for lint tools:
+wemake-python-styleguide==1.7.0         # The strictest and most opinionated python linter ever
+flake8-print==5.0.0                     # Flake8 plguin to check print-s in code.
+flake8-bugbear==25.11.29                # A plugin for Flake8 finding likely bugs and design problems in your program.
+flake8-assertive==2.2.0                 # flake8-assertive is a Flake8 extension that encourages using richer, more specific unittest assertions beyond just the typical assertEqual(a, b) and assertTrue(x) methods
+flake8-docstrings==1.7.0                # A simple module that adds an extension for the fantastic pydocstyle tool to flake8.
+flake8-eradicate==1.5.0                 # flake8 plugin to find commented out (or so called "dead") code.
+flake8-builtins==3.1.0                  # Check for python builtins being used as variables or parameters.
+flake8-annotations==3.2.0               # Flake8 Type Annotation Checks
+flake8-comprehensions==3.17.0           # A flake8 plugin to help you write better list/set/dict comprehensions.
+flake8-spellcheck==0.28.0               # Flake8 Plugin that spellchecks variables, functions, classes and other bits of your python code.
+pep8-naming==0.15.1                     # Check your code against PEP 8 naming conventions.

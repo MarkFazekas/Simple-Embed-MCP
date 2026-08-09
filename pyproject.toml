@@ -1,0 +1,87 @@
+[tool.mypy]
+python_version = "3.12"
+strict = true
+
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_any_generics = true
+check_untyped_defs = true
+no_implicit_reexport = true
+
+disallow_untyped_defs = true
+
+[tool.ruff.lint]
+select = ["ALL"]
+
+external = ["WPS"]
+
+ignore = [
+    # Avoid enforcing line-length violations (`E501`)
+    "E501",
+    # Avoid enforcing no-blank-line-before-class violations (`D211`)
+    "D211",
+    # Avoid enforcing multi-line-summary-second-line violations (`D213`)
+    "D213",
+    # Avoid enforcing Missing docstring in public module (`D100`) because nobody will read it.
+    "D100",
+    # Avoid enforcing Missing docstring in public package (`D104`) because nobody will read it.
+    "D104",
+    # Avoid enforcing Missing copyright notice at top of file (`CPY001`).
+    "CPY001",
+    # The following rules may cause conflicts when used with the formatter: `COM812`, `D203`
+    "COM812",
+    "D203",
+]
+
+# Fix isort violations (I)
+# Fix flake8-type-checking violations (TC)
+fixable = ["I", "TC"]
+# Avoid trying to fix flake8-bugbear (`B`) violations.
+unfixable = ["B"]
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff]
+
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+]
+
+# Assume Python 3.12
+target-version = "py312"
+
+line-length = 120
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true
+
+[tool.lint.ruff.mccabe]
+max-complexity = 10
+
+[tool.lint.ruff.pydocstyle]
+# Use Google-style docstrings.
+convention = "google"

@@ -1,0 +1,42 @@
+[flake8]
+extend-select = B901,B902,B903
+ignore =
+    # Avoid enforcing Missing docstring in public module (`D100`) because nobody will read it.
+    D100,
+    # Avoid enforcing Missing docstring in public package (`D104`) because nobody will read it.
+    D104,
+    # Avoid f-string restrictions (`WPS305`, `WPS237`).
+    WPS305,
+    WPS237,
+
+per-file-ignores =
+    # Avoid enforcing Use of `assert` detected (`S101`) in tests files because it makes no sense.
+    # Avoid enforcing Found too many imported names from a module (`WPS235`) in tests files because it is valid for tests.
+    # Avoid enforcing Found too many imports (`WPS201`) it needs some refactor.
+    **/tests/*: S101,WPS235,WPS201
+max_complexity = 10
+max_line_length = 120
+statistics = True
+count = True
+inline-quotes=double
+# Relates to WPS226
+max-string-usages=5
+# Relates to WPS118
+max-name-length=50
+# Relates to WPS202
+max-module-members=20
+# Relates to WPS210
+max-local-variables=10
+# Relates to WPS229
+max-try-body-length=2
+# Relates to WPS221
+max-line-complexity=20
+# Relates to WPS201
+max-imports=15
+# Relates to WPS214
+max-methods=10
+docstring-convention=google
+docstring_style=google
+strictness=long
+eradicate-aggressive=True
+dictionaries=en_US,python,technical,pandas

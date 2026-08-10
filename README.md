@@ -5,7 +5,40 @@
 [![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
 
 
-# Setup commands
+# Setup
+
+## Pyenv
+
+How to install:   
+https://github.com/pyenv/pyenv/wiki#suggested-build-environment
+
+```shell
+curl https://pyenv.run | bash
+```
+
+How to update:  
+```shell
+cd ~/.pyenv/plugins/python-build/../.. && git pull && cd -
+pyenv install --list
+```
+
+Install:
+
+```shell
+env PYTHON_CONFIGURE_OPTS='--enable-optimizations --with-lto' PYTHON_CFLAGS='-march=native -mtune=native' pyenv install 3.12.3
+pyenv virtualenv 3.12.3 afs3123
+pyenv local afs3123
+```
+
+Install:
+
+```shell
+env PYTHON_CONFIGURE_OPTS='--enable-optimizations --with-lto' PYTHON_CFLAGS='-march=native -mtune=native' pyenv install 3.12.3
+pyenv virtualenv 3.12.3 sem3123
+pyenv local sem3123
+```
+
+## Python
 
 ```shell
 pip install uv
@@ -20,6 +53,12 @@ python -m ruff format
 python -m ruff check .
 python -m flake8 .
 python -m mypy .
+```
+
+# Default Embedding
+
+```shell
+ollama pull qwen3-embedding:4b
 ```
 
 

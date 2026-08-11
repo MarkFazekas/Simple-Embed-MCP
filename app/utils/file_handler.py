@@ -1,15 +1,17 @@
 from pathlib import Path
 from typing import Self
 
+from app.types import CollectionName
+
 
 class FileHandler:
     @classmethod
-    def get_collection_folder(cls: type[Self], collection_name: str) -> Path:
+    def get_collection_folder(cls: type[Self], collection_name: CollectionName) -> Path:
         """Determine the collection specific folder location."""
         return cls._ensure_folder(cls._get_collections_folder() / collection_name)
 
     @classmethod
-    def get_collection_data_folder(cls: type[Self], collection_name: str) -> Path:
+    def get_collection_data_folder(cls: type[Self], collection_name: CollectionName) -> Path:
         """Determine the collection specific folder location."""
         return cls._ensure_folder(cls.get_collection_folder(collection_name=collection_name) / "data")
 

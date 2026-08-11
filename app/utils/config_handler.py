@@ -1,4 +1,4 @@
-from functools import cache
+from functools import cache, lru_cache
 from typing import Self
 
 from app.classes import CollectionConfigDict, RootConfigDict
@@ -24,6 +24,7 @@ class ConfigHandler:
         cls.get_root_config.cache_clear()
 
     @classmethod
+    @lru_cache
     def get_collection_config(cls: type[Self], collection_name: str) -> CollectionConfigDict:
         """We are loading the collection specific config file."""
         collection_config = FileHandler.get_collection_folder(collection_name=collection_name) / "config.json"
@@ -38,3 +39,4 @@ class ConfigHandler:
         """We are updating the collection config file."""
         collection_config = FileHandler.get_collection_folder(collection_name=collection_name) / "config.json"
         collection_config.write_text(config.model_dump_json(indent=4), encoding="utf8")
+        cls.get_collection_config.cache_clear()

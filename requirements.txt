@@ -1,4 +1,7 @@
 fastmcp==4.0.0b2                        # The fast, Pythonic way to build MCP servers and clients.
+python-ulid[pydantic]==4.0.1            # Universally unique lexicographically sortable identifier
+requests==2.34.2                        # Python HTTP for Humans.
+numpy==2.5.2                            # Fundamental package for array computing in Python
 
 
 # Lint tools:

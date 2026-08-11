@@ -58,5 +58,5 @@ ollama pull qwen3-embedding:4b
 ## FastMCP
 
 ```shell
-fastmcp dev inspector -m app.main --no-reload
+fastmcp dev inspector -m app.main --no-reload --ui-port 12345
 ```

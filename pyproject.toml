@@ -24,8 +24,12 @@ ignore = [
     "D213",
     # Avoid enforcing Missing docstring in public module (`D100`) because nobody will read it.
     "D100",
+    # Avoid enforcing Missing docstring in public class (`D101`) because nobody will read it.
+    "D101",
     # Avoid enforcing Missing docstring in public package (`D104`) because nobody will read it.
     "D104",
+    # Avoid enforcing Missing blank line after last section (`D413`) because I do not like that style.
+    "D413",
     # Avoid enforcing Missing copyright notice at top of file (`CPY001`).
     "CPY001",
     # The following rules may cause conflicts when used with the formatter: `COM812`, `D203`

@@ -3,6 +3,8 @@ extend-select = B901,B902,B903
 ignore =
     # Avoid enforcing Missing docstring in public module (`D100`) because nobody will read it.
     D100,
+    # Avoid enforcing Missing docstring in public class (`D101`) because nobody will read it.
+    D101,
     # Avoid enforcing Missing docstring in public package (`D104`) because nobody will read it.
     D104,
     # Avoid f-string restrictions (`WPS305`, `WPS237`).
@@ -14,6 +16,8 @@ per-file-ignores =
     # Avoid enforcing Found too many imported names from a module (`WPS235`) in tests files because it is valid for tests.
     # Avoid enforcing Found too many imports (`WPS201`) it needs some refactor.
     **/tests/*: S101,WPS235,WPS201
+    # Avoid enforcing Found unpythonic getter or setter (`WPS615`) because it is not object with getters and setters.
+    app/utils/*.py: WPS615
 max_complexity = 10
 max_line_length = 120
 statistics = True

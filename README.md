@@ -26,14 +26,6 @@ Install:
 
 ```shell
 env PYTHON_CONFIGURE_OPTS='--enable-optimizations --with-lto' PYTHON_CFLAGS='-march=native -mtune=native' pyenv install 3.12.3
-pyenv virtualenv 3.12.3 afs3123
-pyenv local afs3123
-```
-
-Install:
-
-```shell
-env PYTHON_CONFIGURE_OPTS='--enable-optimizations --with-lto' PYTHON_CFLAGS='-march=native -mtune=native' pyenv install 3.12.3
 pyenv virtualenv 3.12.3 sem3123
 pyenv local sem3123
 ```
@@ -55,10 +47,16 @@ python -m flake8 .
 python -m mypy .
 ```
 
-# Default Embedding
+# Run
+
+## Embedding
 
 ```shell
 ollama pull qwen3-embedding:4b
 ```
 
+## FastMCP
 
+```shell
+fastmcp dev inspector -m app.main --no-reload
+```

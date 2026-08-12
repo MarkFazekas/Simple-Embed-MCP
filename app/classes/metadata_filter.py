@@ -126,6 +126,34 @@ class LowerThanEqualConditionBlock(BaseModel):
             return meta_value >= self.expected_value
         return False
 
+class ContainsConditionBlock(BaseModel):
+    """This object describes the structure of a contains comparison."""
+
+    condition_block_type: Literal["single"]
+    comparator_name: Literal["contains"]
+    meta_field_name: str
+    expected_value: Any
+
+    def calculate_condition_block(self: Self, metadata: ExistingMetadata) -> bool:
+        """This function calculates the condition block."""
+        if meta_value := metadata.get(self.meta_field_name):
+            return self.expected_value in meta_value
+        return False
+
+class NotContainsConditionBlock(BaseModel):
+    """This object describes the structure of a not contains comparison."""
+
+    condition_block_type: Literal["single"]
+    comparator_name: Literal["not_contains"]
+    meta_field_name: str
+    expected_value: Any
+
+    def calculate_condition_block(self: Self, metadata: ExistingMetadata) -> bool:
+        """This function calculates the condition block."""
+        if meta_value := metadata.get(self.meta_field_name):
+            return self.expected_value not in meta_value
+        return False
+
 
 def get_condition_block_discriminator_value(checked_value: Any) -> str:
     """This function returns the discriminator value of the condition block."""
@@ -146,6 +174,8 @@ ConditionBlockItem = Annotated[
     | Annotated[GreaterThanEqualConditionBlock, Tag("single_greater_than_equal")]
     | Annotated[LowerThanConditionBlock, Tag("single_lower_than")]
     | Annotated[LowerThanEqualConditionBlock, Tag("single_lower_than_equal")]
+    | Annotated[ContainsConditionBlock, Tag("single_contains")]
+    | Annotated[NotContainsConditionBlock, Tag("single_not_contains")]
     | Annotated[NotEqualConditionBlock, Tag("single_not_equal")],
     Discriminator(get_condition_block_discriminator_value),
 ]

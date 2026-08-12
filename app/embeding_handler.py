@@ -20,7 +20,8 @@ class EmbeddingHandler:
                     error_message = f"Embedding generation failed with ollama provider: {error}"
                     raise ValueError(error_message)
 
-                return result.get("embeddings")
+                embeddings: list[list[float]] = result.get("embeddings")
+                return embeddings
 
         error_message = f"{embedding_provider=} not supported"
         raise ValueError(error_message)

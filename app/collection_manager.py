@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Annotated, Literal, Self
 
 from fastmcp.tools import tool
-from pydantic import Field, StringConstraints
+from pydantic import Field
 
 from app.classes import (
     BatchCollectionAdditionOperation,
@@ -12,7 +12,7 @@ from app.classes import (
 )
 from app.constants import MAX_VARIABLE_STRING_LENGTH
 from app.embeding_handler import EmbeddingHandler
-from app.store_handler.in_file_handler import InFileStoreHandler
+from app.store_handler.in_file_handler import InFileSearchResult, InFileStoreHandler
 from app.types import CollectionName, EmbeddingProvider
 from app.utils.config_handler import ConfigHandler
 
@@ -77,7 +77,7 @@ class CollectionManager:
         collection_name: CollectionName,
         stored_value: Annotated[str, Field(min_length=3)],
         embeddable_key: str | None = None,
-    ):
+    ) -> list[str]:
         """Adds a new value to an existing collection.
 
         Args:
@@ -88,7 +88,7 @@ class CollectionManager:
                 (Only the embedding vector of this value will be stored.)
         """
         addition_operation = CollectionAdditionOperation(stored_value=stored_value, embeddable_key=embeddable_key)
-        cls.add_values_to_collection(collection_name=collection_name, addition_operations=[addition_operation])
+        return cls.add_values_to_collection(collection_name=collection_name, addition_operations=[addition_operation])
 
     @classmethod
     @tool(timeout=600)
@@ -96,7 +96,7 @@ class CollectionManager:
         cls: type[Self],
         collection_name: CollectionName,
         batch_file_path: Path,
-    ):
+    ) -> list[str]:
         """Adds a new values to an existing collection.
 
         Args:
@@ -115,13 +115,20 @@ class CollectionManager:
 
         addition_operations_text = batch_file_path.read_text(encoding="utf8")
         addition_operations = BatchCollectionAdditionOperation.model_validate_json(addition_operations_text)
-        cls.add_values_to_collection(collection_name=collection_name, addition_operations=addition_operations.batch)
+        return cls.add_values_to_collection(
+            collection_name=collection_name, addition_operations=addition_operations.batch
+        )
 
     @classmethod
     def add_values_to_collection(
         cls: type[Self], collection_name: CollectionName, addition_operations: list[CollectionAdditionOperation]
-    ):
-        """"""
+    ) -> list[str]:
+        """Adds values to an existing collection in batch.
+
+        Args:
+            collection_name: Name of the collection.
+            addition_operations: List of CollectionAdditionOperations to execute.
+        """
         collection_config: CollectionConfigDict = ConfigHandler.get_collection_config(collection_name=collection_name)
 
         embeddable_keys = [
@@ -141,3 +148,60 @@ class CollectionManager:
                 stored_values = [addition_operation.stored_value for addition_operation in addition_operations]
                 ids: list[str] = store_handler.store_values(stored_values=stored_values)
                 store_handler.append_batch(embeddings=embedding_vectors, ids=ids)
+                return ids
+        return []
+
+    @classmethod
+    @tool(timeout=60)
+    def search_in_collection_embedding(
+        cls: type[Self],
+        collection_name: CollectionName,
+        search_key: str,
+        number_of_return_values: int = 10,
+    ) -> list[InFileSearchResult]:
+        """Returns the top number_of_return_values matching search_key in the collection.
+        It uses only cosine similarity search.
+
+        Args:
+            collection_name: Name of the collection.
+            search_key: The string value which we will use to search in the collection's embedding vectors.
+            number_of_return_values: The number of values to return.
+        """
+        collection_config: CollectionConfigDict = ConfigHandler.get_collection_config(collection_name=collection_name)
+
+        embedding_vectors: list[list[float]] = EmbeddingHandler.generate_embeddings(
+            embedding_provider=collection_config.embedding_provider,
+            embedding_model=collection_config.embedding_model,
+            input_texts=[search_key],
+        )
+        embedding_vector = embedding_vectors[0]
+
+        match collection_config.collection_storage:
+            case "in_file":
+                store_handler = InFileStoreHandler(collection_name=collection_name)
+                result = store_handler.search_embedding(query_embedding=embedding_vector, k=number_of_return_values)
+                return result
+
+    @classmethod
+    @tool(timeout=60)
+    def search_in_collection_bm25(
+        cls: type[Self],
+        collection_name: CollectionName,
+        search_key: str,
+        number_of_return_values: int = 10,
+    ) -> list[InFileSearchResult]:
+        """Returns the top number_of_return_values matching search_key in the collection.
+        It uses only BM25 search.
+
+        Args:
+            collection_name: Name of the collection.
+            search_key: The string value which we will use to search in the collection's embedding vectors.
+            number_of_return_values: The number of values to return.
+        """
+        collection_config: CollectionConfigDict = ConfigHandler.get_collection_config(collection_name=collection_name)
+
+        match collection_config.collection_storage:
+            case "in_file":
+                store_handler = InFileStoreHandler(collection_name=collection_name)
+                result = store_handler.search_bm25(query=search_key, top_k=number_of_return_values)
+                return result

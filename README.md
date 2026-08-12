@@ -58,5 +58,6 @@ ollama pull qwen3-embedding:4b
 ## FastMCP
 
 ```shell
+MCP_SERVER_REQUEST_TIMEOUT=600000 \
 fastmcp dev inspector -m app.main --no-reload --ui-port 12345
 ```

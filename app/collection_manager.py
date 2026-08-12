@@ -145,8 +145,7 @@ class CollectionManager:
         match collection_config.collection_storage:
             case "in_file":
                 store_handler = InFileStoreHandler(collection_name=collection_name)
-                stored_values = [addition_operation.stored_value for addition_operation in addition_operations]
-                ids: list[str] = store_handler.store_values(stored_values=stored_values)
+                ids: list[str] = store_handler.store_key_values(addition_operations=addition_operations)
                 store_handler.append_batch(embeddings=embedding_vectors, ids=ids)
                 return ids
         return []
@@ -184,18 +183,18 @@ class CollectionManager:
 
     @classmethod
     @tool(timeout=60)
-    def search_in_collection_bm25(
+    def search_in_collection_keys_bm25(
         cls: type[Self],
         collection_name: CollectionName,
         search_key: str,
         number_of_return_values: int = 10,
     ) -> list[InFileSearchResult]:
-        """Returns the top number_of_return_values matching search_key in the collection.
+        """Returns the top number_of_return_values matching search_key in the collection keys.
         It uses only BM25 search.
 
         Args:
             collection_name: Name of the collection.
-            search_key: The string value which we will use to search in the collection's embedding vectors.
+            search_key: The string value which we will use to search in the collection's keys.
             number_of_return_values: The number of values to return.
         """
         collection_config: CollectionConfigDict = ConfigHandler.get_collection_config(collection_name=collection_name)
@@ -203,5 +202,29 @@ class CollectionManager:
         match collection_config.collection_storage:
             case "in_file":
                 store_handler = InFileStoreHandler(collection_name=collection_name)
-                result = store_handler.search_bm25(query=search_key, top_k=number_of_return_values)
+                result = store_handler.search_bm25_by_key(query=search_key, top_k=number_of_return_values)
+                return result
+
+    @classmethod
+    @tool(timeout=60)
+    def search_in_collection_values_bm25(
+        cls: type[Self],
+        collection_name: CollectionName,
+        search_key: str,
+        number_of_return_values: int = 10,
+    ) -> list[InFileSearchResult]:
+        """Returns the top number_of_return_values matching search_key in the collection values.
+        It uses only BM25 search.
+
+        Args:
+            collection_name: Name of the collection.
+            search_key: The string value which we will use to search in the collection's values.
+            number_of_return_values: The number of values to return.
+        """
+        collection_config: CollectionConfigDict = ConfigHandler.get_collection_config(collection_name=collection_name)
+
+        match collection_config.collection_storage:
+            case "in_file":
+                store_handler = InFileStoreHandler(collection_name=collection_name)
+                result = store_handler.search_bm25_by_value(query=search_key, top_k=number_of_return_values)
                 return result

@@ -10,7 +10,8 @@ mcp.add_tool(collection_manager_obj.add_collection)
 mcp.add_tool(collection_manager_obj.add_value_to_collection)
 mcp.add_tool(collection_manager_obj.batch_add_values_to_collection)
 mcp.add_tool(collection_manager_obj.search_in_collection_embedding)
-mcp.add_tool(collection_manager_obj.search_in_collection_bm25)
+mcp.add_tool(collection_manager_obj.search_in_collection_keys_bm25)
+mcp.add_tool(collection_manager_obj.search_in_collection_values_bm25)
 
 if __name__ == "__main__":
     mcp.run()

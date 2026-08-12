@@ -1,13 +1,14 @@
 import math
 import re
 from collections import Counter
-from functools import lru_cache
+from functools import lru_cache, partial
 from pathlib import Path
 from typing import Callable, TypedDict
 
 import numpy as np
 from ulid import ULID
 
+from app.classes import CollectionAdditionOperation
 from app.types import CollectionName
 from app.utils.file_handler import FileHandler
 
@@ -20,22 +21,30 @@ class InFileSearchResult(TypedDict):
 
 
 class BM25:
-    def __init__(self, documents: list[str], document_ids: list[str], k1=1.5, b=0.75):
+    def __init__(
+        self,
+        searchable_documents: list[str],
+        result_documents: list[str],
+        document_ids: list[str],
+        k1: float = 1.5,
+        b: float = 0.75,
+    ):
         self.term_frequency_sat = k1
         self.document_length_norm = b
 
         self.document_ids = document_ids
-        self.document_texts = documents
-        self.documents = [self.tokenize(doc) for doc in documents]
-        self.number_of_documents = len(self.documents)
+        self.result_documents = result_documents
+        self.searchable_documents = searchable_documents
+        self.searchable_words = [self.tokenize(doc) for doc in searchable_documents]
+        self.number_of_documents = len(self.searchable_words)
 
-        self.doc_lengths = [len(doc) for doc in self.documents]
+        self.doc_lengths = [len(doc) for doc in self.searchable_words]
         self.avg_doc_length = sum(self.doc_lengths) / self.number_of_documents if self.number_of_documents else 0
 
         self.term_frequencies = []
-        self.document_frequencies = Counter()
+        self.document_frequencies: Counter = Counter()
 
-        for doc in self.documents:
+        for doc in self.searchable_words:
             tf = Counter(doc)
             self.term_frequencies.append(tf)
 
@@ -48,10 +57,10 @@ class BM25:
             self.idf[term] = math.log(1 + (self.number_of_documents - df + 0.5) / (df + 0.5))
 
     @staticmethod
-    def tokenize(text):
+    def tokenize(text: str):
         return re.findall(r"\b\w+\b", text.lower())
 
-    def score(self, query, doc_index):
+    def score(self, query: str, doc_index: int) -> float:
         query_terms = self.tokenize(query)
 
         tf = self.term_frequencies[doc_index]
@@ -77,7 +86,7 @@ class BM25:
 
         return score
 
-    def search(self, query, top_k=5) -> list[InFileSearchResult]:
+    def search(self, query: str, top_k: int) -> list[InFileSearchResult]:
         results = [(i, self.score(query, i)) for i in range(self.number_of_documents)]
 
         results.sort(key=lambda x: x[1], reverse=True)
@@ -87,7 +96,7 @@ class BM25:
                 index=index,
                 id=self.document_ids[index],
                 score=score,
-                result_text=self.document_texts[index],
+                result_text=self.result_documents[index],
             )
             for index, score in results[:top_k]
             if score > 0
@@ -103,7 +112,20 @@ class InFileStoreHandler:
         config_store_folder: Path = FileHandler.get_collection_folder(collection_name=collection_name)
         self.vector_file_path = config_store_folder / "vectors.npy"
         self.ids_file_path = config_store_folder / "ids.npy"
-        self.stored_file_path: Callable[[str | ULID], Path] = lambda ulid: self.data_store_folder / f"{ulid}.txt"
+        self.stored_value_file_path: Callable[[str | ULID], Path] = partial(
+            self.get_stored_value_file_path, self.data_store_folder
+        )
+        self.stored_key_file_path: Callable[[str | ULID], Path] = partial(
+            self.get_stored_key_file_path, self.data_store_folder
+        )
+
+    @classmethod
+    def get_stored_value_file_path(cls, data_store_folder: Path, ulid: str | ULID) -> Path:
+        return data_store_folder / f"{ulid}_value.txt"
+
+    @classmethod
+    def get_stored_key_file_path(cls, data_store_folder: Path, ulid: str | ULID) -> Path:
+        return data_store_folder / f"{ulid}_key.txt"
 
     def append_batch(
         self,
@@ -149,7 +171,8 @@ class InFileStoreHandler:
         np.save(self.vector_file_path, vectors)
         np.save(self.ids_file_path, all_ids)
         self.get_np_vectors.cache_clear()
-        self.get_bm25_obj.cache_clear()
+        self.get_bm25_key_only_filter.cache_clear()
+        self.get_bm25_value_only_filter.cache_clear()
 
     @classmethod
     @lru_cache
@@ -160,20 +183,52 @@ class InFileStoreHandler:
 
     @classmethod
     @lru_cache
-    def get_bm25_obj(cls, data_store_folder: Path, ids_file_path: Path) -> BM25:
+    def get_bm25_key_only_filter(cls, data_store_folder: Path, ids_file_path: Path) -> BM25:
         ids: np.ndarray = np.load(ids_file_path)
-        document_ids = [str(ulid) for ulid in ids]
-        document_texts = [(data_store_folder / f"{ulid}.txt").read_text(encoding="utf8") for ulid in document_ids]
-        return BM25(documents=document_texts, document_ids=document_ids)
+        searchable_documents = []
+        result_documents = []
+        document_ids = []
+        for np_ulid in ids:
+            ulid = str(np_ulid)
+            key_path = cls.get_stored_key_file_path(data_store_folder, ulid)
+            if key_path.exists():
+                document_ids.append(ulid)
+                key_content = key_path.read_text(encoding="utf8")
+                searchable_documents.append(key_content)
+                value_path = cls.get_stored_value_file_path(data_store_folder, ulid)
+                value_content = value_path.read_text(encoding="utf8")
+                result_documents.append(value_content)
 
-    def store_values(self, stored_values: list[str]) -> list[str]:
+        return BM25(
+            searchable_documents=searchable_documents, document_ids=document_ids, result_documents=result_documents
+        )
+
+    @classmethod
+    @lru_cache
+    def get_bm25_value_only_filter(cls, data_store_folder: Path, ids_file_path: Path) -> BM25:
+        ids: np.ndarray = np.load(ids_file_path)
+        result_documents = []
+        document_ids = []
+        for np_ulid in ids:
+            ulid = str(np_ulid)
+            document_ids.append(ulid)
+            value_path = cls.get_stored_value_file_path(data_store_folder, ulid)
+            value_content = value_path.read_text(encoding="utf8")
+            result_documents.append(value_content)
+
+        return BM25(searchable_documents=result_documents, document_ids=document_ids, result_documents=result_documents)
+
+    def store_key_values(self, addition_operations: list[CollectionAdditionOperation]) -> list[str]:
         """Stores the files and returns their ULIDs"""
         list_of_ulids: list[str] = []
-        for stored_value in stored_values:
+        for addition_operation in addition_operations:
             ulid = ULID()
-            file_path = self.stored_file_path(ulid)
-            file_path.write_text(stored_value, encoding="utf8")
+            file_path = self.stored_value_file_path(ulid)
+            file_path.write_text(addition_operation.stored_value, encoding="utf8")
             list_of_ulids.append(str(ulid))
+            if addition_operation.embeddable_key:
+                file_path = self.stored_key_file_path(ulid)
+                file_path.write_text(addition_operation.embeddable_key, encoding="utf8")
 
         return list_of_ulids
 
@@ -218,11 +273,17 @@ class InFileStoreHandler:
                 index=int(i),
                 id=str(ids[i]),
                 score=float(scores[i]),
-                result_text=self.stored_file_path(str(ids[i])).read_text(encoding="utf8"),
+                result_text=self.stored_value_file_path(str(ids[i])).read_text(encoding="utf8"),
             )
             for i in indexes
         ]
 
-    def search_bm25(self, query: str, top_k: int = 5) -> list[InFileSearchResult]:
-        bm25 = self.get_bm25_obj(data_store_folder=self.data_store_folder, ids_file_path=self.ids_file_path)
+    def search_bm25_by_value(self, query: str, top_k: int) -> list[InFileSearchResult]:
+        bm25 = self.get_bm25_value_only_filter(
+            data_store_folder=self.data_store_folder, ids_file_path=self.ids_file_path
+        )
+        return bm25.search(query, top_k=top_k)
+
+    def search_bm25_by_key(self, query: str, top_k: int) -> list[InFileSearchResult]:
+        bm25 = self.get_bm25_key_only_filter(data_store_folder=self.data_store_folder, ids_file_path=self.ids_file_path)
         return bm25.search(query, top_k=top_k)

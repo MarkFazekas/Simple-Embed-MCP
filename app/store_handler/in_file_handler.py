@@ -1,3 +1,4 @@
+import json
 import math
 import re
 from collections import Counter
@@ -8,8 +9,9 @@ from typing import Callable, TypedDict
 import numpy as np
 from ulid import ULID
 
-from app.classes import CollectionAdditionOperation
-from app.types import CollectionName
+from app.classes.base_classes import CollectionAdditionOperation
+from app.classes.metadata_filter import MetaDataFilter
+from app.types import CollectionName, Metadata
 from app.utils.file_handler import FileHandler
 
 
@@ -18,6 +20,7 @@ class InFileSearchResult(TypedDict):
     id: str
     score: float
     result_text: str
+    metadata: Metadata
 
 
 class BM25:
@@ -25,6 +28,7 @@ class BM25:
         self,
         searchable_documents: list[str],
         result_documents: list[str],
+        metadata_list: list[Metadata],
         document_ids: list[str],
         k1: float = 1.5,
         b: float = 0.75,
@@ -34,6 +38,7 @@ class BM25:
 
         self.document_ids = document_ids
         self.result_documents = result_documents
+        self.metadata_list = metadata_list
         self.searchable_documents = searchable_documents
         self.searchable_words = [self.tokenize(doc) for doc in searchable_documents]
         self.number_of_documents = len(self.searchable_words)
@@ -86,7 +91,7 @@ class BM25:
 
         return score
 
-    def search(self, query: str, top_k: int) -> list[InFileSearchResult]:
+    def search(self, query: str, metadata_filter: MetaDataFilter, top_k: int) -> list[InFileSearchResult]:
         results = [(i, self.score(query, i)) for i in range(self.number_of_documents)]
 
         results.sort(key=lambda x: x[1], reverse=True)
@@ -97,9 +102,10 @@ class BM25:
                 id=self.document_ids[index],
                 score=score,
                 result_text=self.result_documents[index],
+                metadata=self.metadata_list[index],
             )
             for index, score in results[:top_k]
-            if score > 0
+            if score > 0 and metadata_filter.calculate_condition_block(self.metadata_list[index])
         ]
 
 
@@ -118,6 +124,9 @@ class InFileStoreHandler:
         self.stored_key_file_path: Callable[[str | ULID], Path] = partial(
             self.get_stored_key_file_path, self.data_store_folder
         )
+        self.stored_meta_file_path: Callable[[str | ULID], Path] = partial(
+            self.get_stored_meta_file_path, self.data_store_folder
+        )
 
     @classmethod
     def get_stored_value_file_path(cls, data_store_folder: Path, ulid: str | ULID) -> Path:
@@ -126,6 +135,10 @@ class InFileStoreHandler:
     @classmethod
     def get_stored_key_file_path(cls, data_store_folder: Path, ulid: str | ULID) -> Path:
         return data_store_folder / f"{ulid}_key.txt"
+
+    @classmethod
+    def get_stored_meta_file_path(cls, data_store_folder: Path, ulid: str | ULID) -> Path:
+        return data_store_folder / f"{ulid}_meta.json"
 
     def append_batch(
         self,
@@ -188,6 +201,7 @@ class InFileStoreHandler:
         searchable_documents = []
         result_documents = []
         document_ids = []
+        metadata_list: list[Metadata] = []
         for np_ulid in ids:
             ulid = str(np_ulid)
             key_path = cls.get_stored_key_file_path(data_store_folder, ulid)
@@ -198,9 +212,13 @@ class InFileStoreHandler:
                 value_path = cls.get_stored_value_file_path(data_store_folder, ulid)
                 value_content = value_path.read_text(encoding="utf8")
                 result_documents.append(value_content)
+                metadata_list.append(cls.get_metadata_by_ulid(data_store_folder, ulid))
 
         return BM25(
-            searchable_documents=searchable_documents, document_ids=document_ids, result_documents=result_documents
+            searchable_documents=searchable_documents,
+            document_ids=document_ids,
+            metadata_list=metadata_list,
+            result_documents=result_documents,
         )
 
     @classmethod
@@ -209,14 +227,21 @@ class InFileStoreHandler:
         ids: np.ndarray = np.load(ids_file_path)
         result_documents = []
         document_ids = []
+        metadata_list = []
         for np_ulid in ids:
             ulid = str(np_ulid)
             document_ids.append(ulid)
             value_path = cls.get_stored_value_file_path(data_store_folder, ulid)
             value_content = value_path.read_text(encoding="utf8")
             result_documents.append(value_content)
+            metadata_list.append(cls.get_metadata_by_ulid(data_store_folder, ulid))
 
-        return BM25(searchable_documents=result_documents, document_ids=document_ids, result_documents=result_documents)
+        return BM25(
+            searchable_documents=result_documents,
+            document_ids=document_ids,
+            result_documents=result_documents,
+            metadata_list=metadata_list,
+        )
 
     def store_key_values(self, addition_operations: list[CollectionAdditionOperation]) -> list[str]:
         """Stores the files and returns their ULIDs"""
@@ -229,12 +254,24 @@ class InFileStoreHandler:
             if addition_operation.embeddable_key:
                 file_path = self.stored_key_file_path(ulid)
                 file_path.write_text(addition_operation.embeddable_key, encoding="utf8")
+            if addition_operation.metadata:
+                file_path = self.stored_meta_file_path(ulid)
+                file_path.write_text(json.dumps(addition_operation.metadata, indent=4), encoding="utf8")
 
         return list_of_ulids
+
+    @classmethod
+    @lru_cache(maxsize=None)
+    def get_metadata_by_ulid(cls, data_store_folder: Path, ulid: str | ULID) -> Metadata:
+        file_path = cls.get_stored_meta_file_path(data_store_folder, ulid)
+        if file_path.exists():
+            return json.loads(file_path.read_text(encoding="utf8"))
+        return None
 
     def search_embedding(
         self,
         query_embedding: list[float],
+        metadata_filter: MetaDataFilter,
         k: int = 5,
     ) -> list[InFileSearchResult]:
         vectors, ids = self.get_np_vectors(self.vector_file_path, self.ids_file_path)
@@ -260,7 +297,29 @@ class InFileStoreHandler:
         # cosine similarity with all vectors
         scores = vectors @ query
 
-        k = min(k, len(scores))
+        # Metadata filter
+        mask = np.array(
+            [
+                metadata_filter.calculate_condition_block(
+                    metadata=self.get_metadata_by_ulid(
+                        data_store_folder=self.data_store_folder,
+                        ulid=str(ulid),
+                    )
+                )
+                for ulid in ids
+            ],
+            dtype=bool,
+        )
+
+        # Exclude vectors that don't match the metadata filter
+        scores[~mask] = -np.inf
+
+        matching_count = int(mask.sum())
+
+        if matching_count == 0:
+            return []
+
+        k = min(k, matching_count)
 
         # We don't order the whole array, we just select the top k.
         indexes = np.argpartition(scores, -k)[-k:]
@@ -273,17 +332,21 @@ class InFileStoreHandler:
                 index=int(i),
                 id=str(ids[i]),
                 score=float(scores[i]),
-                result_text=self.stored_value_file_path(str(ids[i])).read_text(encoding="utf8"),
+                result_text=self.stored_value_file_path(ulid=str(ids[i])).read_text(encoding="utf8"),
+                metadata=self.get_metadata_by_ulid(
+                    data_store_folder=self.data_store_folder,
+                    ulid=str(ids[i]),
+                ),
             )
             for i in indexes
         ]
 
-    def search_bm25_by_value(self, query: str, top_k: int) -> list[InFileSearchResult]:
+    def search_bm25_by_value(self, query: str, metadata_filter: MetaDataFilter, top_k: int) -> list[InFileSearchResult]:
         bm25 = self.get_bm25_value_only_filter(
             data_store_folder=self.data_store_folder, ids_file_path=self.ids_file_path
         )
-        return bm25.search(query, top_k=top_k)
+        return bm25.search(query, metadata_filter=metadata_filter, top_k=top_k)
 
-    def search_bm25_by_key(self, query: str, top_k: int) -> list[InFileSearchResult]:
+    def search_bm25_by_key(self, query: str, metadata_filter: MetaDataFilter, top_k: int) -> list[InFileSearchResult]:
         bm25 = self.get_bm25_key_only_filter(data_store_folder=self.data_store_folder, ids_file_path=self.ids_file_path)
-        return bm25.search(query, top_k=top_k)
+        return bm25.search(query, metadata_filter=metadata_filter, top_k=top_k)

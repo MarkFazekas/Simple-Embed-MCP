@@ -4,16 +4,17 @@ from typing import Annotated, Literal, Self
 from fastmcp.tools import tool
 from pydantic import Field
 
-from app.classes import (
+from app.classes.base_classes import (
     BatchCollectionAdditionOperation,
     CollectionAdditionOperation,
     CollectionConfigDict,
     RootConfigDict,
 )
+from app.classes.metadata_filter import MetaDataFilter, EMPTY_METADATA_FILTER
 from app.constants import MAX_VARIABLE_STRING_LENGTH
 from app.embeding_handler import EmbeddingHandler
 from app.store_handler.in_file_handler import InFileSearchResult, InFileStoreHandler
-from app.types import CollectionName, EmbeddingProvider
+from app.types import CollectionName, EmbeddingProvider, Metadata
 from app.utils.config_handler import ConfigHandler
 
 
@@ -77,6 +78,7 @@ class CollectionManager:
         collection_name: CollectionName,
         stored_value: Annotated[str, Field(min_length=3)],
         embeddable_key: str | None = None,
+        metadata: Metadata = None,
     ) -> list[str]:
         """Adds a new value to an existing collection.
 
@@ -86,8 +88,11 @@ class CollectionManager:
             embeddable_key: The embedding vector will be calculated based on this if present.
                 If embeddable_key is not provided, stored_value will be used.
                 (Only the embedding vector of this value will be stored.)
+            metadata: The searchable metadata, if present.
         """
-        addition_operation = CollectionAdditionOperation(stored_value=stored_value, embeddable_key=embeddable_key)
+        addition_operation = CollectionAdditionOperation(
+            stored_value=stored_value, embeddable_key=embeddable_key, metadata=metadata
+        )
         return cls.add_values_to_collection(collection_name=collection_name, addition_operations=[addition_operation])
 
     @classmethod
@@ -108,6 +113,7 @@ class CollectionManager:
                 - embeddable_key: The embedding vector will be calculated based on this if present.
                        If embeddable_key is not provided, stored_value will be used.
                        (Only the embedding vector of this value will be stored.)
+                - metadata: The searchable metadata, if present.
         """
         if not batch_file_path.exists():
             error_message = f"{batch_file_path=} is not exists"
@@ -157,6 +163,7 @@ class CollectionManager:
         collection_name: CollectionName,
         search_key: str,
         number_of_return_values: int = 10,
+        metadata_filter: MetaDataFilter | None = EMPTY_METADATA_FILTER,
     ) -> list[InFileSearchResult]:
         """Returns the top number_of_return_values matching search_key in the collection.
         It uses only cosine similarity search.
@@ -165,8 +172,11 @@ class CollectionManager:
             collection_name: Name of the collection.
             search_key: The string value which we will use to search in the collection's embedding vectors.
             number_of_return_values: The number of values to return.
+            metadata_filter: Optional metadata filter.
         """
         collection_config: CollectionConfigDict = ConfigHandler.get_collection_config(collection_name=collection_name)
+
+        metadata_filter = metadata_filter or EMPTY_METADATA_FILTER
 
         embedding_vectors: list[list[float]] = EmbeddingHandler.generate_embeddings(
             embedding_provider=collection_config.embedding_provider,
@@ -178,7 +188,9 @@ class CollectionManager:
         match collection_config.collection_storage:
             case "in_file":
                 store_handler = InFileStoreHandler(collection_name=collection_name)
-                result = store_handler.search_embedding(query_embedding=embedding_vector, k=number_of_return_values)
+                result = store_handler.search_embedding(
+                    query_embedding=embedding_vector, metadata_filter=metadata_filter, k=number_of_return_values
+                )
                 return result
 
     @classmethod
@@ -188,6 +200,7 @@ class CollectionManager:
         collection_name: CollectionName,
         search_key: str,
         number_of_return_values: int = 10,
+        metadata_filter: MetaDataFilter | None = EMPTY_METADATA_FILTER,
     ) -> list[InFileSearchResult]:
         """Returns the top number_of_return_values matching search_key in the collection keys.
         It uses only BM25 search.
@@ -196,13 +209,18 @@ class CollectionManager:
             collection_name: Name of the collection.
             search_key: The string value which we will use to search in the collection's keys.
             number_of_return_values: The number of values to return.
+            metadata_filter: Optional metadata filter.
         """
         collection_config: CollectionConfigDict = ConfigHandler.get_collection_config(collection_name=collection_name)
+
+        metadata_filter = metadata_filter or EMPTY_METADATA_FILTER
 
         match collection_config.collection_storage:
             case "in_file":
                 store_handler = InFileStoreHandler(collection_name=collection_name)
-                result = store_handler.search_bm25_by_key(query=search_key, top_k=number_of_return_values)
+                result = store_handler.search_bm25_by_key(
+                    query=search_key, metadata_filter=metadata_filter, top_k=number_of_return_values
+                )
                 return result
 
     @classmethod
@@ -212,6 +230,7 @@ class CollectionManager:
         collection_name: CollectionName,
         search_key: str,
         number_of_return_values: int = 10,
+        metadata_filter: MetaDataFilter | None = EMPTY_METADATA_FILTER,
     ) -> list[InFileSearchResult]:
         """Returns the top number_of_return_values matching search_key in the collection values.
         It uses only BM25 search.
@@ -220,11 +239,16 @@ class CollectionManager:
             collection_name: Name of the collection.
             search_key: The string value which we will use to search in the collection's values.
             number_of_return_values: The number of values to return.
+            metadata_filter: Optional metadata filter.
         """
         collection_config: CollectionConfigDict = ConfigHandler.get_collection_config(collection_name=collection_name)
+
+        metadata_filter = metadata_filter or EMPTY_METADATA_FILTER
 
         match collection_config.collection_storage:
             case "in_file":
                 store_handler = InFileStoreHandler(collection_name=collection_name)
-                result = store_handler.search_bm25_by_value(query=search_key, top_k=number_of_return_values)
+                result = store_handler.search_bm25_by_value(
+                    query=search_key, metadata_filter=metadata_filter, top_k=number_of_return_values
+                )
                 return result

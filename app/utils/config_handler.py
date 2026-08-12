@@ -1,7 +1,7 @@
 from functools import cache, lru_cache
 from typing import Self
 
-from app.classes import CollectionConfigDict, RootConfigDict
+from app.classes.base_classes import CollectionConfigDict, RootConfigDict
 from app.utils.file_handler import FileHandler
 
 

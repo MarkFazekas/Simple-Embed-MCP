@@ -3,7 +3,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field
 
 from app.constants import MAX_VARIABLE_STRING_LENGTH
-from app.types import EmbeddingProvider
+from app.types import EmbeddingProvider, Metadata
 
 
 class RootConfigDict(BaseModel):
@@ -19,6 +19,7 @@ class CollectionConfigDict(BaseModel):
 class CollectionAdditionOperation(BaseModel):
     stored_value: Annotated[str, Field(min_length=3)]
     embeddable_key: str | None = None
+    metadata: Metadata = None
 
 
 class BatchCollectionAdditionOperation(BaseModel):

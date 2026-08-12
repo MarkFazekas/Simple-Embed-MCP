@@ -77,8 +77,8 @@ class GreaterThanConditionBlock(BaseModel):
 
     def calculate_condition_block(self: Self, metadata: ExistingMetadata) -> bool:
         """This function calculates the condition block."""
-        if meta_value := metadata.get(self.meta_field_name):
-            return meta_value < self.expected_value
+        if meta_value := metadata.get(self.meta_field_name) is not None:
+            return self.expected_value < meta_value
         return False
 
 
@@ -92,8 +92,8 @@ class GreaterThanEqualConditionBlock(BaseModel):
 
     def calculate_condition_block(self: Self, metadata: ExistingMetadata) -> bool:
         """This function calculates the condition block."""
-        if meta_value := metadata.get(self.meta_field_name):
-            return meta_value <= self.expected_value
+        if meta_value := metadata.get(self.meta_field_name) is not None:
+            return self.expected_value <= meta_value
         return False
 
 
@@ -107,8 +107,8 @@ class LowerThanConditionBlock(BaseModel):
 
     def calculate_condition_block(self: Self, metadata: ExistingMetadata) -> bool:
         """This function calculates the condition block."""
-        if meta_value := metadata.get(self.meta_field_name):
-            return meta_value > self.expected_value
+        if meta_value := metadata.get(self.meta_field_name) is not None:
+            return self.expected_value > meta_value
         return False
 
 
@@ -122,9 +122,10 @@ class LowerThanEqualConditionBlock(BaseModel):
 
     def calculate_condition_block(self: Self, metadata: ExistingMetadata) -> bool:
         """This function calculates the condition block."""
-        if meta_value := metadata.get(self.meta_field_name):
-            return meta_value >= self.expected_value
+        if meta_value := metadata.get(self.meta_field_name) is not None:
+            return self.expected_value >= meta_value
         return False
+
 
 class ContainsConditionBlock(BaseModel):
     """This object describes the structure of a contains comparison."""
@@ -136,9 +137,10 @@ class ContainsConditionBlock(BaseModel):
 
     def calculate_condition_block(self: Self, metadata: ExistingMetadata) -> bool:
         """This function calculates the condition block."""
-        if meta_value := metadata.get(self.meta_field_name):
+        if meta_value := metadata.get(self.meta_field_name) is not None:
             return self.expected_value in meta_value
         return False
+
 
 class NotContainsConditionBlock(BaseModel):
     """This object describes the structure of a not contains comparison."""
@@ -150,7 +152,7 @@ class NotContainsConditionBlock(BaseModel):
 
     def calculate_condition_block(self: Self, metadata: ExistingMetadata) -> bool:
         """This function calculates the condition block."""
-        if meta_value := metadata.get(self.meta_field_name):
+        if meta_value := metadata.get(self.meta_field_name) is not None:
             return self.expected_value not in meta_value
         return False
 

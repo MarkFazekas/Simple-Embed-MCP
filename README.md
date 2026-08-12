@@ -61,3 +61,11 @@ ollama pull qwen3-embedding:4b
 MCP_SERVER_REQUEST_TIMEOUT=600000 \
 fastmcp dev inspector -m app.main --no-reload --ui-port 12345
 ```
+
+# Build
+
+```shell
+python -m pip install pyinstaller
+
+python -m PyInstaller --clean --noconfirm --onefile --console --name simple-embed-mcp --paths . --collect-all fastmcp   --copy-metadata fastmcp app/main.py
+```

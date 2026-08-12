@@ -94,7 +94,10 @@ class BM25:
     def search(self, query: str, metadata_filter: MetaDataFilter, top_k: int) -> list[InFileSearchResult]:
         results = [(i, self.score(query, i)) for i in range(self.number_of_documents)]
 
-        results.sort(key=lambda x: x[1], reverse=True)
+        matching = [
+            (i, s) for i, s in results if s > 0 and metadata_filter.calculate_condition_block(self.metadata_list[i])
+        ]
+        matching.sort(key=lambda x: x[1], reverse=True)
 
         return [
             InFileSearchResult(
@@ -104,8 +107,8 @@ class BM25:
                 result_text=self.result_documents[index],
                 metadata=self.metadata_list[index],
             )
-            for index, score in results[:top_k]
-            if score > 0 and metadata_filter.calculate_condition_block(self.metadata_list[index])
+            for index, score in matching[:top_k]
+            if score > 0
         ]
 
 

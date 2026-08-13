@@ -1,4 +1,4 @@
-from typing import Annotated, Literal
+from typing import Annotated, Literal, TypedDict
 
 from pydantic import BaseModel, Field
 
@@ -24,3 +24,8 @@ class CollectionAdditionOperation(BaseModel):
 
 class BatchCollectionAdditionOperation(BaseModel):
     batch: list[CollectionAdditionOperation]
+
+
+class InFileDeleteResult(TypedDict):
+    deleted: list[str]
+    not_found: list[str]

@@ -2,7 +2,7 @@ from typing import Literal, Self, Annotated, Any
 
 from pydantic import BaseModel, Tag, Discriminator
 
-from app.types import Metadata, ExistingMetadata
+from app.types import Metadata, ExistingMetadata, MetadataValue
 
 
 class NestedConditionBlock(BaseModel):
@@ -131,34 +131,51 @@ class LowerThanEqualConditionBlock(BaseModel):
         return False
 
 
-class ContainsConditionBlock(BaseModel):
-    """This object describes the structure of a contains comparison."""
+class ContainmentConditionBlock(BaseModel):
+    """Shared base of the comparators that apply `in` to a metadata value."""
 
     condition_block_type: Literal["single"]
-    comparator_name: Literal["contains"]
+    # Narrowed to its own Literal by each subclass; declared here so the shared guard can name it.
+    comparator_name: str
     meta_field_name: str
     expected_value: Any
+
+    def ensure_container(self: Self, meta_value: MetadataValue) -> None:
+        """Raise on a scalar field. A silent False is indistinguishable from an honest no-match."""
+        # bool is excluded despite subclassing int, because `x in True` raises rather than False.
+        if not isinstance(meta_value, (str, list)):
+            exception_message = (
+                f"'{self.comparator_name}' needs a list or string metadata field, but "
+                f"'{self.meta_field_name}' holds {type(meta_value).__name__} ({meta_value!r}). "
+                f"Use 'equal'/'not_equal' for a scalar, or a range comparator for a number."
+            )
+            raise TypeError(exception_message)
+
+
+class ContainsConditionBlock(ContainmentConditionBlock):
+    """This object describes the structure of a contains comparison."""
+
+    comparator_name: Literal["contains"]
 
     def calculate_condition_block(self: Self, metadata: ExistingMetadata) -> bool:
         """This function calculates the condition block."""
         meta_value = metadata.get(self.meta_field_name)
         if meta_value is not None:
+            self.ensure_container(meta_value)
             return self.expected_value in meta_value
         return False
 
 
-class NotContainsConditionBlock(BaseModel):
+class NotContainsConditionBlock(ContainmentConditionBlock):
     """This object describes the structure of a not contains comparison."""
 
-    condition_block_type: Literal["single"]
     comparator_name: Literal["not_contains"]
-    meta_field_name: str
-    expected_value: Any
 
     def calculate_condition_block(self: Self, metadata: ExistingMetadata) -> bool:
         """This function calculates the condition block."""
         meta_value = metadata.get(self.meta_field_name)
         if meta_value is not None:
+            self.ensure_container(meta_value)
             return self.expected_value not in meta_value
         return False
 

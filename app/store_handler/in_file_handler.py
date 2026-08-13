@@ -9,7 +9,7 @@ from typing import Callable, TypedDict
 import numpy as np
 from ulid import ULID
 
-from app.classes.base_classes import CollectionAdditionOperation
+from app.classes.base_classes import CollectionAdditionOperation, InFileDeleteResult
 from app.classes.metadata_filter import MetaDataFilter
 from app.types import CollectionName, Metadata
 from app.utils.file_handler import FileHandler
@@ -119,8 +119,7 @@ class InFileStoreHandler:
     ):
         self.data_store_folder: Path = FileHandler.get_collection_data_folder(collection_name=collection_name)
         config_store_folder: Path = FileHandler.get_collection_folder(collection_name=collection_name)
-        self.vector_file_path = config_store_folder / "vectors.npy"
-        self.ids_file_path = config_store_folder / "ids.npy"
+        self.index_file_path = config_store_folder / "index.npz"
         self.stored_value_file_path: Callable[[str | ULID], Path] = partial(
             self.get_stored_value_file_path, self.data_store_folder
         )
@@ -171,7 +170,7 @@ class InFileStoreHandler:
         new_ids = np.asarray(ids)
 
         try:
-            old_vectors, old_ids = self.get_np_vectors(self.vector_file_path, self.ids_file_path)
+            old_vectors, old_ids = self.get_np_vectors(self.index_file_path)
 
             if old_vectors.shape[1] != new_vectors.shape[1]:
                 error_message = f"Dimension mismatch: {old_vectors.shape[1]} != {new_vectors.shape[1]}"
@@ -184,23 +183,61 @@ class InFileStoreHandler:
             vectors = new_vectors
             all_ids = new_ids
 
-        np.save(self.vector_file_path, vectors)
-        np.save(self.ids_file_path, all_ids)
-        self.get_np_vectors.cache_clear()
-        self.get_bm25_key_only_filter.cache_clear()
-        self.get_bm25_value_only_filter.cache_clear()
+        self.write_index(vectors=vectors, ids=all_ids)
+
+    def write_index(self, vectors: np.ndarray, ids: np.ndarray) -> None:
+        """Rewrite the index in place.
+
+        One file, so the arrays cannot disagree. A torn write leaves an archive np.load rejects,
+        and the collection is committed, so recovery is a revert.
+        """
+        np.savez(self.index_file_path, vectors=vectors, ids=ids)
+        self.clear_caches()
+
+    @classmethod
+    def clear_caches(cls) -> None:
+        """Metadata included: appends only mint new ULIDs, but deletes free memoised ones."""
+        cls.get_np_vectors.cache_clear()
+        cls.get_bm25_key_only_filter.cache_clear()
+        cls.get_bm25_value_only_filter.cache_clear()
+        cls.get_metadata_by_ulid.cache_clear()
+
+    def delete_values(self, value_ids: list[str]) -> InFileDeleteResult:
+        """Remove entries by id. Missing ids are returned, not raised -- the rest are already gone."""
+        vectors, ids = self.get_np_vectors(self.index_file_path)
+        requested = np.asarray(value_ids, dtype=np.str_)
+        found = np.isin(requested, ids)
+
+        if found.any():
+            # Index first: an unlisted entry is invisible, a listed one with no file crashes BM25.
+            kept = ~np.isin(ids, requested)
+            self.write_index(vectors=vectors[kept], ids=ids[kept])
+            for value_id in requested[found]:
+                for file_path in (
+                    self.stored_value_file_path(value_id),
+                    self.stored_key_file_path(value_id),
+                    self.stored_meta_file_path(value_id),
+                ):
+                    file_path.unlink(missing_ok=True)
+            # write_index already cleared, but that was before the files went. Anything repopulated
+            # in between still memoises the metadata of entries that no longer exist.
+            self.clear_caches()
+
+        return InFileDeleteResult(deleted=requested[found].tolist(), not_found=requested[~found].tolist())
 
     @classmethod
     @lru_cache
-    def get_np_vectors(cls, vector_file_path: Path, ids_file_path: Path) -> tuple[np.ndarray, np.ndarray]:
-        vectors: np.ndarray = np.load(vector_file_path)
-        ids: np.ndarray = np.load(ids_file_path)
+    def get_np_vectors(cls, index_file_path: Path) -> tuple[np.ndarray, np.ndarray]:
+        # One file, written whole: the two arrays cannot disagree on length.
+        with np.load(index_file_path) as index:
+            vectors: np.ndarray = index["vectors"]
+            ids: np.ndarray = index["ids"]
         return vectors, ids
 
     @classmethod
     @lru_cache
-    def get_bm25_key_only_filter(cls, data_store_folder: Path, ids_file_path: Path) -> BM25:
-        ids: np.ndarray = np.load(ids_file_path)
+    def get_bm25_key_only_filter(cls, data_store_folder: Path, index_file_path: Path) -> BM25:
+        _, ids = cls.get_np_vectors(index_file_path)
         searchable_documents = []
         result_documents = []
         document_ids = []
@@ -226,8 +263,8 @@ class InFileStoreHandler:
 
     @classmethod
     @lru_cache
-    def get_bm25_value_only_filter(cls, data_store_folder: Path, ids_file_path: Path) -> BM25:
-        ids: np.ndarray = np.load(ids_file_path)
+    def get_bm25_value_only_filter(cls, data_store_folder: Path, index_file_path: Path) -> BM25:
+        _, ids = cls.get_np_vectors(index_file_path)
         result_documents = []
         document_ids = []
         metadata_list = []
@@ -277,7 +314,7 @@ class InFileStoreHandler:
         metadata_filter: MetaDataFilter,
         k: int = 5,
     ) -> list[InFileSearchResult]:
-        vectors, ids = self.get_np_vectors(self.vector_file_path, self.ids_file_path)
+        vectors, ids = self.get_np_vectors(self.index_file_path)
 
         query = np.asarray(query_embedding, dtype=np.float32)
 
@@ -346,10 +383,12 @@ class InFileStoreHandler:
 
     def search_bm25_by_value(self, query: str, metadata_filter: MetaDataFilter, top_k: int) -> list[InFileSearchResult]:
         bm25 = self.get_bm25_value_only_filter(
-            data_store_folder=self.data_store_folder, ids_file_path=self.ids_file_path
+            data_store_folder=self.data_store_folder, index_file_path=self.index_file_path
         )
         return bm25.search(query, metadata_filter=metadata_filter, top_k=top_k)
 
     def search_bm25_by_key(self, query: str, metadata_filter: MetaDataFilter, top_k: int) -> list[InFileSearchResult]:
-        bm25 = self.get_bm25_key_only_filter(data_store_folder=self.data_store_folder, ids_file_path=self.ids_file_path)
+        bm25 = self.get_bm25_key_only_filter(
+            data_store_folder=self.data_store_folder, index_file_path=self.index_file_path
+        )
         return bm25.search(query, metadata_filter=metadata_filter, top_k=top_k)

@@ -8,6 +8,7 @@ from app.classes.base_classes import (
     BatchCollectionAdditionOperation,
     CollectionAdditionOperation,
     CollectionConfigDict,
+    InFileDeleteResult,
     RootConfigDict,
 )
 from app.classes.metadata_filter import MetaDataFilter, EMPTY_METADATA_FILTER
@@ -155,6 +156,33 @@ class CollectionManager:
                 store_handler.append_batch(embeddings=embedding_vectors, ids=ids)
                 return ids
         return []
+
+    @classmethod
+    @tool(timeout=60)
+    def delete_values_from_collection(
+        cls: type[Self],
+        collection_name: CollectionName,
+        value_ids: list[str],
+    ) -> InFileDeleteResult:
+        """Deletes entries from a collection by their ids.
+
+        Removes the value, the key, the metadata and the embedding vector. There is no update tool:
+        to change an entry, delete it and add it again.
+
+        Args:
+            collection_name: Name of the collection.
+            value_ids: The ids to delete, as returned in the `id` field of any search result.
+
+        Returns:
+            deleted: the ids that were removed. not_found: the ids that were not in the collection.
+        """
+        collection_config: CollectionConfigDict = ConfigHandler.get_collection_config(collection_name=collection_name)
+
+        match collection_config.collection_storage:
+            case "in_file":
+                store_handler = InFileStoreHandler(collection_name=collection_name)
+                return store_handler.delete_values(value_ids=value_ids)
+        return InFileDeleteResult(deleted=[], not_found=value_ids)
 
     @classmethod
     @tool(timeout=60)
